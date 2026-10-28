@@ -622,7 +622,7 @@ export class MapComponent implements AfterViewInit {
 				const labelX = canvasX + halfCanvasWidth;
 				const labelY = canvasY + halfCanvasHeight - textOffset;
 
-				// Station names are drawn as DOM text, so estimate the box they will take and drop names that would sit on top of a more important station's name.
+				// Station names are drawn as DOM text, so estimate the box they will take. stationsForMap() is sorted by route count (interchanges first), so a name is dropped when it would sit on top of one already placed.
 				const nameParts = this.splitNamePipe.transform(name);
 				const textWidth = Math.max(0, ...nameParts.map(({text, isCjk}) => text.length * (isCjk ? LABEL_CJK_CHAR_WIDTH : LABEL_LATIN_CHAR_WIDTH))) * boxScale / 2;
 				const textHeight = (nameParts.reduce((sum, {isCjk}) => sum + (isCjk ? LABEL_CJK_LINE_HEIGHT : LABEL_LATIN_LINE_HEIGHT), 0) + (icons.length > 0 ? LABEL_ICON_HEIGHT : 0)) * boxScale;

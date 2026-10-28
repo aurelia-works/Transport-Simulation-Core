@@ -128,3 +128,14 @@ iconify-icon {
 .p-drawer {
 	border: none !important;
 }
+
+/* Icon with a text label underneath, used in the line style and interchange style buttons */
+.toggle-item {
+	gap: 0.1rem;
+	min-width: 2.4rem;
+}
+
+.toggle-label {
+	font-size: 0.65rem;
+	line-height: 1;
+}

@@ -86,6 +86,8 @@ export class MainPanelComponent {
 		language: new FormControl(getCookie("language") || this.translocoService.getActiveLang()),
 	});
 	protected readonly routeTypes = signal<[string, RouteType][]>([]);
+	private dimensionOptions: { value: string, label: string }[] = [];
+	private dimensionOptionsKey = "";
 
 	protected readonly languageOptions = computed(() => {
 		return this.translocoService.getAvailableLangs().map(lang => {
@@ -118,10 +120,16 @@ export class MainPanelComponent {
 	}
 
 	getDimensionOptions() {
-		return this.getDimensions().map(dimension => {
-			const key = DIMENSION_NAME_KEYS[dimension.replace(":", "/")];
-			return {value: dimension, label: key ? this.translocoService.translate(key) : dimension};
-		});
+		const dimensions = this.getDimensions();
+		const cacheKey = `${this.translocoService.getActiveLang()}|${dimensions.join("|")}`;
+		if (cacheKey !== this.dimensionOptionsKey) {
+			this.dimensionOptionsKey = cacheKey;
+			this.dimensionOptions = dimensions.map(dimension => {
+				const key = DIMENSION_NAME_KEYS[dimension.replace(":", "/")];
+				return {value: dimension, label: key ? this.translocoService.translate(key) : dimension};
+			});
+		}
+		return this.dimensionOptions;
 	}
 
 	setDimension() {
