@@ -22,3 +22,98 @@
 .small-divider {
 	--p-divider-horizontal-margin: 1px 0;
 }
+
+.next-train {
+	border-left: 0.35rem solid;
+	border-radius: var(--p-button-border-radius);
+	background: var(--p-content-hover-background);
+	padding: 0.5rem 0.75rem;
+}
+
+.next-train-label {
+	font-size: 0.75rem;
+	font-weight: 600;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	opacity: 0.7;
+}
+
+.next-train-icon {
+	font-size: 1.5rem;
+}
+
+.destination {
+	min-width: 0;
+}
+
+.destination-main {
+	font-size: 1.15rem;
+	font-weight: 600;
+	line-height: 1.3em;
+}
+
+.destination-sub {
+	font-size: 0.8rem;
+	line-height: 1.3em;
+	opacity: 0.75;
+}
+
+.countdown {
+	font-size: 1.5rem;
+	font-weight: 700;
+	line-height: 1.1em;
+	white-space: nowrap;
+}
+
+.platform-text {
+	font-size: 0.8rem;
+	white-space: nowrap;
+}
+
+.align-end {
+	align-items: flex-end;
+}
+
+.arrival-row {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	gap: 0.5rem;
+	border-left: 0.3rem solid;
+	border-bottom: 1px solid var(--p-content-border-color);
+	padding: 0.4rem 0.5rem;
+}
+
+.arrival-row.scheduled {
+	opacity: 0.7;
+}
+
+.arrival-row .destination {
+	flex: 1;
+}
+
+.arrival-row .destination-main {
+	font-size: 0.95rem;
+}
+
+.arrival-row .destination-sub {
+	font-size: 0.7rem;
+}
+
+.platform-chip {
+	border: 1px solid var(--p-content-border-color);
+	border-radius: var(--p-button-border-radius);
+	font-size: 0.75rem;
+	font-weight: 600;
+	min-width: 1.8rem;
+	padding: 0.1rem 0.4rem;
+	text-align: center;
+	white-space: nowrap;
+}
+
+.countdown-small {
+	font-weight: 700;
+	min-width: 4rem;
+	text-align: right;
+	white-space: nowrap;
+}

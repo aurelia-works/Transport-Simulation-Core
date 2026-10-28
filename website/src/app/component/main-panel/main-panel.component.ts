@@ -16,12 +16,18 @@ import {ToggleSwitchModule} from "primeng/toggleswitch";
 import {VisibilityToggleComponent} from "../visibility-toggle/visibility-toggle.component";
 import {InterchangeStyleToggleComponent} from "../interchange-style-toggle/interchange-style-toggle.component";
 import {SearchComponent} from "../search/search.component";
-import {AccordionModule} from "primeng/accordion";
 import {ClientsService} from "../../service/clients.service";
 import {DataListEntryComponent} from "../data-list-entry/data-list-entry.component";
 import {TranslocoDirective, TranslocoService} from "@jsverse/transloco";
 import {getCookie, setCookie} from "../../data/utilities";
 import {VERSION} from "../../../version";
+
+// Vanilla dimensions get a plain name; modded ones keep their id
+const DIMENSION_NAME_KEYS: Record<string, string> = {
+	"minecraft/overworld": "mainPanel.dimensionOverworld",
+	"minecraft/the_nether": "mainPanel.dimensionNether",
+	"minecraft/the_end": "mainPanel.dimensionEnd",
+};
 
 const languageMapping: Record<string, string> = {
 	en: "English",
@@ -40,7 +46,6 @@ const languageMapping: Record<string, string> = {
 		ToggleSwitchModule,
 		DividerModule,
 		TooltipModule,
-		AccordionModule,
 		TranslocoDirective,
 		FormsModule,
 		ReactiveFormsModule,
@@ -110,6 +115,13 @@ export class MainPanelComponent {
 
 	getDimensions() {
 		return this.dimensionService.getDimensions();
+	}
+
+	getDimensionOptions() {
+		return this.getDimensions().map(dimension => {
+			const key = DIMENSION_NAME_KEYS[dimension.replace(":", "/")];
+			return {value: dimension, label: key ? this.translocoService.translate(key) : dimension};
+		});
 	}
 
 	setDimension() {
