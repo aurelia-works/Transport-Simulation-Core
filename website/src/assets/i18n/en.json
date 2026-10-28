@@ -20,6 +20,8 @@
 		"dimension": "Dimension",
 		"findDirections": "Find Directions",
 		"interchangeStyle": "Interchange Style",
+		"lineThickness": "Line thickness: {{value}}px",
+		"labelDensity": "Label density: {{value}}%",
 		"players": "Players ({{count}})",
 		"noPlayersOnline": "There are no players online.",
 		"darkTheme": "Dark Theme",

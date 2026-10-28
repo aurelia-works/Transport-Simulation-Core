@@ -1,9 +1,10 @@
 import * as THREE from "three";
-import {AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, CUSTOM_ELEMENTS_SCHEMA, DestroyRef, ElementRef, inject, isDevMode, output, signal, viewChild} from "@angular/core";
+import {AfterViewInit, ChangeDetectionStrategy, ChangeDetectorRef, Component, CUSTOM_ELEMENTS_SCHEMA, DestroyRef, effect, ElementRef, inject, isDevMode, output, signal, viewChild} from "@angular/core";
 import {takeUntilDestroyed} from "@angular/core/rxjs-interop";
 import SETTINGS from "../../utility/settings";
 import {ANIMATION_DURATION_MILLIS, ARROW_SPACING, CLIENT_IMAGE_PADDING, CLIENT_IMAGE_SIZE} from "../../utility/map.constants";
 import {MapDataService} from "../../service/map-data.service";
+import {MapSettingsService} from "../../service/map-settings.service";
 import {connectStations, connectWith45} from "../../utility/drawing";
 import {OrbitControls} from "three/examples/jsm/controls/OrbitControls.js";
 import {LineMaterial} from "three/examples/jsm/lines/LineMaterial.js";
@@ -32,6 +33,21 @@ const lineMaterialNormalDashed = new LineMaterial({color: 0xFFFFFF, linewidth: 6
 const lineMaterialThin = new LineMaterial({color: 0xFFFFFF, linewidth: 3 * SETTINGS.scale * devicePixelRatio, vertexColors: true});
 const lineMaterialThinDashed = new LineMaterial({color: 0xFFFFFF, linewidth: 3 * SETTINGS.scale * devicePixelRatio, vertexColors: true, dashed: true});
 
+/** Route colours darker than this (0-1) are lightened in the dark theme. */
+const DARK_THEME_MIN_LUMINANCE = 0.3;
+/** Space around the network when it is fitted to the screen (pixels). */
+const FIT_PADDING = 90;
+/** The fitted view never zooms in further than this, so a one-station map is not blown up. */
+const FIT_MAX_ZOOM = 1.5;
+/** Rough size of one station name part, matching the font sizes in map.component.scss (pixels). */
+const LABEL_LATIN_CHAR_WIDTH = 5.6;
+const LABEL_LATIN_LINE_HEIGHT = 11.5;
+const LABEL_CJK_CHAR_WIDTH = 19.2;
+const LABEL_CJK_LINE_HEIGHT = 23;
+const LABEL_ICON_HEIGHT = 19;
+/** Most station labels kept on screen at once, even when their text is hidden (they stay clickable). */
+const MAX_LABEL_TARGETS = 300;
+
 @Component({
 	selector: "app-map",
 	changeDetection: ChangeDetectionStrategy.OnPush,
@@ -53,6 +69,7 @@ export class MapComponent implements AfterViewInit {
 	private readonly mapSelectionService = inject(MapSelectionService);
 	private readonly clientsService = inject(ClientsService);
 	private readonly themeService = inject(ThemeService);
+	private readonly mapSettingsService = inject(MapSettingsService);
 
 	readonly stationClicked = output<string>();
 	readonly clientClicked = output<string>();
@@ -86,6 +103,21 @@ export class MapComponent implements AfterViewInit {
 	private lineGeometryThin: LineGeometry | undefined;
 	private lineGeometryThinDashed: LineGeometry | undefined;
 	private pointsForLineConnection: Record<string, [number, number, boolean][]> = {};
+	private onSettingsChanged: (() => void) | undefined;
+	private readonly splitNamePipe = new SplitNamePipe();
+
+	constructor() {
+		effect(() => {
+			this.mapSettingsService.lineThickness();
+			this.mapSettingsService.labelDensity();
+			this.onSettingsChanged?.();
+		});
+	}
+
+	/** Distance between parallel route lines; station shapes are sized in half of it per route. */
+	private lineSpacing() {
+		return (this.mapSettingsService.lineThickness() + 1) * SETTINGS.scale;
+	}
 
 	private canvas() {
 		return this.canvasRef().nativeElement;
@@ -164,6 +196,11 @@ export class MapComponent implements AfterViewInit {
 			this.animationFrameId = requestAnimationFrame(animate);
 		};
 		this.animationFrameId = requestAnimationFrame(animate);
+		this.onSettingsChanged = () => {
+			if (!this.mapDataService.mapLoading()) {
+				draw(true);
+			}
+		};
 
 		this.controls = new OrbitControls(this.camera, this.wrapperRef().nativeElement);
 		this.controls.target.set(0, 0, 0);
@@ -181,7 +218,7 @@ export class MapComponent implements AfterViewInit {
 			this.scene.clear();
 
 			if (needsCenter) {
-				this.centerMap();
+				this.fitMap();
 				needsCenter = false;
 			}
 
@@ -315,8 +352,8 @@ export class MapComponent implements AfterViewInit {
 			const {id, x, z} = station;
 			const stationSelected = this.mapSelectionService.selectedStations.length === 0 || this.mapSelectionService.selectedStations.includes(id);
 			const adjustZ = stationSelected ? 20 : 0;
-			const newWidth = width * 3 * SETTINGS.scale / this.camera.zoom;
-			const newHeight = height * 3 * SETTINGS.scale / this.camera.zoom;
+			const newWidth = width * this.lineSpacing() / 2 / this.camera.zoom;
+			const newHeight = height * this.lineSpacing() / 2 / this.camera.zoom;
 			processShape(x, -z, 7, newWidth, newHeight, rotate, adjustZ - 1, this.getColor(blackColor, whiteColor, grayColorLight, grayColorDark, stationSelected));
 			processShape(x, -z, 5, newWidth, newHeight, rotate, adjustZ, this.getColor(whiteColor, blackColor, backgroundColor, backgroundColor, stationSelected));
 
@@ -410,6 +447,11 @@ export class MapComponent implements AfterViewInit {
 	private createLines(refreshDashedLines: () => void) {
 		this.pointsForLineConnection = {};
 
+		const lineWidth = this.mapSettingsService.lineThickness() * SETTINGS.scale * devicePixelRatio;
+		lineMaterialNormal.linewidth = lineWidth;
+		lineMaterialNormalDashed.linewidth = lineWidth;
+		lineMaterialThin.linewidth = lineWidth / 2;
+		lineMaterialThinDashed.linewidth = lineWidth / 2;
 		lineMaterialNormalDashed.dashSize = 8 * SETTINGS.scale / this.camera.zoom;
 		lineMaterialNormalDashed.gapSize = 4 * SETTINGS.scale / this.camera.zoom;
 		lineMaterialThinDashed.dashSize = 16 * SETTINGS.scale / this.camera.zoom;
@@ -448,9 +490,9 @@ export class MapComponent implements AfterViewInit {
 				const {color, offset1, offset2, oneWay} = lineConnectionParts[i];
 				const colorInt = parseInt(color.split("|")[0]);
 				const lineSelected = this.mapSelectionService.selectedStations.length === 0 || this.mapSelectionService.selectedStationConnections.some(stationConnection => stationConnection.routeColor === colorInt && stationConnection.stationIds[0] === stationId1 && stationConnection.stationIds[1] === stationId2);
-				const newColorInt = this.getColor(colorInt, colorInt, grayColorLight, grayColorDark, lineSelected);
+				const newColorInt = this.getColor(colorInt, this.liftDarkColor(colorInt), grayColorLight, grayColorDark, lineSelected);
 				const noService = false; // TODO
-				const colorOffset = (i - lineConnectionParts.length / 2 + 0.5) * 6 * SETTINGS.scale;
+				const colorOffset = (i - lineConnectionParts.length / 2 + 0.5) * this.lineSpacing();
 				const routeTypeVisibility = this.mapDataService.routeTypeVisibility()[color.split("|")[1]];
 				const dashed = routeTypeVisibility === "DASHED";
 				const hollow = routeTypeVisibility === "HOLLOW" || dashed;
@@ -474,8 +516,8 @@ export class MapComponent implements AfterViewInit {
 					z2,
 					direction1,
 					direction2,
-					offset1 * 6 * SETTINGS.scale / this.camera.zoom,
-					offset2 * 6 * SETTINGS.scale / this.camera.zoom,
+					offset1 * this.lineSpacing() / this.camera.zoom,
+					offset2 * this.lineSpacing() / this.camera.zoom,
 					colorOffset / this.camera.zoom,
 					this.canvas().clientWidth,
 					this.canvas().clientHeight,
@@ -557,7 +599,10 @@ export class MapComponent implements AfterViewInit {
 		const halfCanvasWidth = this.canvas().clientWidth / 2;
 		const halfCanvasHeight = this.canvas().clientHeight / 2;
 		const newTextLabels: TextLabel[] = [];
-		let renderedTextCount = 0;
+
+		const boxScale = (100 - this.mapSettingsService.labelDensity()) / 50;
+		const placedTexts: [number, number, number, number][] = [];
+		let targetCount = 0;
 
 		this.mapDataService.stationsForMap().forEach(({station, rotate, width, height}) => {
 			const {id, name, getIcons, x, z} = station;
@@ -565,28 +610,43 @@ export class MapComponent implements AfterViewInit {
 			const canvasY = (z + this.camera.position.y) * this.camera.zoom;
 			const clientGroup = this.clientsService.clientGroupsForStation()[id];
 
-			if (Math.abs(canvasX) <= halfCanvasWidth && Math.abs(canvasY) <= halfCanvasHeight && (clientGroup || renderedTextCount < SETTINGS.maxText * 2) && (this.mapSelectionService.selectedStations.length === 0 || this.mapSelectionService.selectedStations.includes(id))) {
-				const newWidth = width * 3 * SETTINGS.scale;
-				const newHeight = height * 3 * SETTINGS.scale;
+			if (targetCount < MAX_LABEL_TARGETS && Math.abs(canvasX) <= halfCanvasWidth && Math.abs(canvasY) <= halfCanvasHeight && (this.mapSelectionService.selectedStations.length === 0 || this.mapSelectionService.selectedStations.includes(id))) {
+				const newWidth = width * this.lineSpacing() / 2;
+				const newHeight = height * this.lineSpacing() / 2;
 				const clientsHeight = clientGroup ? CLIENT_IMAGE_SIZE * SETTINGS.scale / 2 : 0;
 				const clientsWidth = clientGroup ? clientsHeight * clientGroup.clients.length + CLIENT_IMAGE_PADDING * SETTINGS.scale * (clientGroup.clients.length - 1) / 2 : 0;
 				const rotatedSize = (newHeight + newWidth) * Math.SQRT1_2;
 				const textOffset = Math.max(rotate ? rotatedSize : newHeight, clientsHeight) + 9 * SETTINGS.scale;
 				const icons = getIcons(type => this.mapDataService.routeTypeVisibility()[type] === "HIDDEN");
+				const stationHeight = Math.max(rotate ? rotatedSize : newHeight, clientsHeight) * 2 + 18 * SETTINGS.scale;
+				const labelX = canvasX + halfCanvasWidth;
+				const labelY = canvasY + halfCanvasHeight - textOffset;
+
+				// Station names are drawn as DOM text, so estimate the box they will take and drop names that would sit on top of a more important station's name.
+				const nameParts = this.splitNamePipe.transform(name);
+				const textWidth = Math.max(0, ...nameParts.map(({text, isCjk}) => text.length * (isCjk ? LABEL_CJK_CHAR_WIDTH : LABEL_LATIN_CHAR_WIDTH))) * boxScale / 2;
+				const textHeight = (nameParts.reduce((sum, {isCjk}) => sum + (isCjk ? LABEL_CJK_LINE_HEIGHT : LABEL_LATIN_LINE_HEIGHT), 0) + (icons.length > 0 ? LABEL_ICON_HEIGHT : 0)) * boxScale;
+				const textTop = labelY + stationHeight + (1 - boxScale) * textHeight / 2;
+				const textBox: [number, number, number, number] = [labelX - textWidth, textTop, labelX + textWidth, textTop + textHeight];
+				const textFits = placedTexts.every(([left, top, right, bottom]) => textBox[2] <= left || textBox[0] >= right || textBox[3] <= top || textBox[1] >= bottom);
+				if (clientGroup || textFits) {
+					placedTexts.push(textBox);
+				}
+
 				newTextLabels.push({
 					hoverOverride: false,
 					id,
 					text: name,
 					icons,
-					shouldRenderText: !!clientGroup || renderedTextCount < SETTINGS.maxText,
+					shouldRenderText: !!clientGroup || textFits,
 					clients: clientGroup?.clients,
 					clientImagePadding: CLIENT_IMAGE_PADDING * SETTINGS.scale,
-					x: canvasX + halfCanvasWidth,
-					y: canvasY + halfCanvasHeight - textOffset,
+					x: labelX,
+					y: labelY,
 					stationWidth: Math.max(rotate ? rotatedSize : newWidth, clientsWidth) * 2 + 18 * SETTINGS.scale,
-					stationHeight: Math.max(rotate ? rotatedSize : newHeight, clientsHeight) * 2 + 18 * SETTINGS.scale,
+					stationHeight,
 				});
-				renderedTextCount++;
+				targetCount++;
 			}
 		});
 
@@ -618,8 +678,28 @@ export class MapComponent implements AfterViewInit {
 		this.changeDetectorRef.detectChanges();
 	}
 
-	private centerMap() {
-		this.moveMap(-this.mapDataService.centerX(), this.mapDataService.centerY());
+	private fitMap() {
+		const stations = this.mapDataService.stationsForMap();
+		if (stations.length === 0) {
+			return;
+		}
+
+		let minX = Number.MAX_VALUE;
+		let maxX = -Number.MAX_VALUE;
+		let minY = Number.MAX_VALUE;
+		let maxY = -Number.MAX_VALUE;
+		stations.forEach(({station: {x, z}}) => {
+			minX = Math.min(minX, x);
+			maxX = Math.max(maxX, x);
+			minY = Math.min(minY, -z);
+			maxY = Math.max(maxY, -z);
+		});
+
+		const availableWidth = Math.max(1, (this.canvas().clientWidth || window.innerWidth) - FIT_PADDING * 2);
+		const availableHeight = Math.max(1, (this.canvas().clientHeight || window.innerHeight) - FIT_PADDING * 2);
+		this.camera.zoom = Math.min(FIT_MAX_ZOOM, availableWidth / Math.max(1, maxX - minX), availableHeight / Math.max(1, maxY - minY));
+		this.camera.updateProjectionMatrix();
+		this.moveMap((minX + maxX) / 2, (minY + maxY) / 2);
 	}
 
 	private moveMap(x: number, y: number) {
@@ -637,6 +717,20 @@ export class MapComponent implements AfterViewInit {
 		} else {
 			return this.isDarkTheme() ? darkColorDisabled : lightColorDisabled;
 		}
+	}
+
+	/** Very dark route colours vanish on the black dark-theme background, so mix them towards white. */
+	private liftDarkColor(color: number) {
+		const r = (color >> 16) & 0xFF;
+		const g = (color >> 8) & 0xFF;
+		const b = color & 0xFF;
+		const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 0xFF;
+		if (luminance >= DARK_THEME_MIN_LUMINANCE) {
+			return color;
+		}
+		const mix = (DARK_THEME_MIN_LUMINANCE - luminance) / (1 - luminance);
+		const lift = (channel: number) => Math.round(channel + (0xFF - channel) * mix);
+		return (lift(r) << 16) | (lift(g) << 8) | lift(b);
 	}
 
 	private getBackgroundColor() {

@@ -1,5 +1,6 @@
 import {ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, output, signal} from "@angular/core";
 import {MapDataService} from "../../service/map-data.service";
+import {LABEL_DENSITY_MAX, LABEL_DENSITY_MIN, LINE_THICKNESS_MAX, LINE_THICKNESS_MIN, MapSettingsService} from "../../service/map-settings.service";
 import {ROUTE_TYPES, RouteType} from "../../data/route-type";
 import {FormControl, FormGroup, FormsModule, ReactiveFormsModule} from "@angular/forms";
 import {DimensionService} from "../../service/dimension.service";
@@ -7,6 +8,7 @@ import {ThemeService} from "../../service/theme.service";
 import {FloatLabelModule} from "primeng/floatlabel";
 import {SelectModule} from "primeng/select";
 import {SelectButtonModule} from "primeng/selectbutton";
+import {SliderModule} from "primeng/slider";
 import {TooltipModule} from "primeng/tooltip";
 import {DividerModule} from "primeng/divider";
 import {ButtonModule} from "primeng/button";
@@ -33,6 +35,7 @@ const languageMapping: Record<string, string> = {
 		FloatLabelModule,
 		SelectModule,
 		SelectButtonModule,
+		SliderModule,
 		ButtonModule,
 		ToggleSwitchModule,
 		DividerModule,
@@ -52,6 +55,7 @@ const languageMapping: Record<string, string> = {
 })
 export class MainPanelComponent {
 	private readonly mapDataService = inject(MapDataService);
+	private readonly mapSettingsService = inject(MapSettingsService);
 	private readonly dimensionService = inject(DimensionService);
 	private readonly clientsService = inject(ClientsService);
 	private readonly themeService = inject(ThemeService);
@@ -62,6 +66,12 @@ export class MainPanelComponent {
 	readonly clientClicked = output<string>();
 	readonly directionsOpened = output<void>();
 	readonly version = VERSION;
+	protected readonly lineThickness = this.mapSettingsService.lineThickness;
+	protected readonly labelDensity = this.mapSettingsService.labelDensity;
+	protected readonly lineThicknessMin = LINE_THICKNESS_MIN;
+	protected readonly lineThicknessMax = LINE_THICKNESS_MAX;
+	protected readonly labelDensityMin = LABEL_DENSITY_MIN;
+	protected readonly labelDensityMax = LABEL_DENSITY_MAX;
 
 	protected readonly formGroup = new FormGroup({
 		search: new FormControl(""),
@@ -126,6 +136,14 @@ export class MainPanelComponent {
 	clickClient(id: string) {
 		this.clientClicked.emit(id);
 		this.formGroup.patchValue({search: undefined});
+	}
+
+	setLineThickness(value: number) {
+		this.mapSettingsService.setLineThickness(value);
+	}
+
+	setLabelDensity(value: number) {
+		this.mapSettingsService.setLabelDensity(value);
 	}
 
 	changeTheme(isDarkTheme: boolean) {

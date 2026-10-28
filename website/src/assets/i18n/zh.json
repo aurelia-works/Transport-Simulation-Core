@@ -20,6 +20,8 @@
 		"dimension": "維度",
 		"findDirections": "尋找路綫",
 		"interchangeStyle": "轉車站樣式",
+		"lineThickness": "綫路粗幼：{{value}}像素",
+		"labelDensity": "站名密度：{{value}}%",
 		"players": "玩家 ({{count}})",
 		"noPlayersOnline": "目前沒有玩家在綫上。",
 		"darkTheme": "深色主題",
