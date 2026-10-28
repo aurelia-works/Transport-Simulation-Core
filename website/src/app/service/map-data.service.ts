@@ -28,8 +28,6 @@ export class MapDataService extends DataServiceBase<{ data: StationsAndRoutesDTO
 	public readonly stationConnections = signal<StationConnection[]>([]);
 	public readonly lineConnections = signal<LineConnection[]>([]);
 	public readonly stationsForMap = signal<StationForMap[]>([]);
-	public readonly centerX = signal<number>(0);
-	public readonly centerY = signal<number>(0);
 	public readonly mapLoading = signal<boolean>(true);
 
 	public readonly drawMap = new ReplaySubject<void>(1);
@@ -183,10 +181,7 @@ export class MapDataService extends DataServiceBase<{ data: StationsAndRoutesDTO
 
 		const tempLineConnections: Record<string, { lineConnectionParts: { color: string, oneWay: number, offset1: number, offset2: number }[], direction1: 0 | 1 | 2 | 3, direction2: 0 | 1 | 2 | 3, x1: number | undefined, x2: number | undefined, z1: number | undefined, z2: number | undefined, stationId1: string, stationId2: string, length: number }> = {};
 		const tempStationConnections: Record<string, { x1: number | undefined, x2: number | undefined, z1: number | undefined, z2: number | undefined, stationId1: string | undefined, stationId2: string | undefined, sizeRatio: number, start45: boolean }> = {};
-		let closestDistance: number;
 		let maxLineConnectionLength = 1;
-		let centerX = 0;
-		let centerY = 0;
 
 		this.stations().forEach(station => {
 			if (station.id in stationRoutes) {
@@ -274,13 +269,6 @@ export class MapDataService extends DataServiceBase<{ data: StationsAndRoutesDTO
 					}
 				});
 
-				const distance = Math.abs(station.x) + Math.abs(station.z);
-				if (closestDistance === undefined || distance < closestDistance) {
-					closestDistance = distance;
-					centerX = -station.x;
-					centerY = -station.z;
-				}
-
 				station.connections.forEach(connectingStation => {
 					const [key, reverse] = getKeyAndReverseFromStationIds(station.id, connectingStation.id);
 					setIfUndefined(tempStationConnections, key, () => ({sizeRatio: 0, start45: false}));
@@ -336,8 +324,6 @@ export class MapDataService extends DataServiceBase<{ data: StationsAndRoutesDTO
 		this.stationConnections.set(stationConnections);
 		this.lineConnections.set(lineConnections);
 		this.stationsForMap.set(stationsForMap);
-		this.centerX.set(centerX);
-		this.centerY.set(centerY);
 		this.drawMap.next();
 		this.mapLoading.set(false);
 	}

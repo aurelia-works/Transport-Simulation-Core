@@ -10,6 +10,7 @@ import {Station} from "../../entity/station";
 import {TooltipModule} from "primeng/tooltip";
 import {ButtonModule} from "primeng/button";
 import {TabsModule} from "primeng/tabs";
+import {AccordionModule} from "primeng/accordion";
 import {CheckboxModule} from "primeng/checkbox";
 import {DividerModule} from "primeng/divider";
 import {DialogModule} from "primeng/dialog";
@@ -27,6 +28,7 @@ import {TranslocoDirective} from "@jsverse/transloco";
 		ButtonModule,
 		TooltipModule,
 		TabsModule,
+		AccordionModule,
 		CheckboxModule,
 		ChipModule,
 		DividerModule,
@@ -94,6 +96,29 @@ export class StationPanelComponent {
 
 	getArrivals() {
 		return this.stationService.getArrivals();
+	}
+
+	getNextArrival(): Arrival | undefined {
+		return this.stationService.getArrivals()[0];
+	}
+
+	getLaterArrivals() {
+		return this.stationService.getArrivals().slice(1);
+	}
+
+	getCountdown(arrival: Arrival, t: (key: string, params?: Record<string, unknown>) => string) {
+		if (arrival.isContinuous) {
+			return t("station.everyEightSeconds");
+		}
+
+		const seconds = arrival.arrivalTime();
+		if (seconds < 0) {
+			return t("station.arrived");
+		} else if (seconds < 60) {
+			return t("station.lessThanMinute");
+		} else {
+			return t("station.minutes", {count: Math.round(seconds / 60)});
+		}
 	}
 
 	getRoutes() {

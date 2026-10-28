@@ -15,4 +15,5 @@ import {FormatColorPipe} from "../../pipe/format-color.pipe";
 export class TitleComponent {
 	readonly name = input.required<string>();
 	readonly color = input<number>();
+	readonly compact = input(false);
 }

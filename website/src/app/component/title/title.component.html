@@ -1,7 +1,7 @@
 <div class="column gap">
 	<div class="column">
 		@for (namePart of name() | splitName; track $index) {
-			<div class="name" [class.cjk]="namePart.isCjk">{{ namePart.text }}</div>
+			<div class="name" [class.cjk]="namePart.isCjk" [class.compact]="compact()">{{ namePart.text }}</div>
 		}
 	</div>
 	@let colorValue = color();

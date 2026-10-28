@@ -3,7 +3,7 @@
 		<div class="column gap-small padding-sides">
 			<app-search [label]="t('mainPanel.searchPlaceholder')" [parentFormGroup]="formGroup" childFormControlName="search" [includeRoutes]="true" (stationClicked)="clickStation($event)" (routeClicked)="clickRoute($event)" (clientClicked)="clickClient($event)"/>
 			<p-float-label variant="in">
-				<p-select inputId="dropdown" formControlName="dimension" [options]="getDimensions()" (onChange)="setDimension()" [fluid]="true"/>
+				<p-select inputId="dropdown" formControlName="dimension" [options]="getDimensionOptions()" optionLabel="label" optionValue="value" (onChange)="setDimension()" [fluid]="true"/>
 				<label for="dropdown">{{ t('mainPanel.dimension') }}</label>
 			</p-float-label>
 			<button pButton class="icon-button" severity="secondary" (click)="directionsOpened.emit()" [fluid]="true">
@@ -33,22 +33,25 @@
 					</div>
 				}
 				<p-divider/>
-				<p-accordion [multiple]="true">
-					<p-accordion-panel>
-						<p-accordion-header>{{ t('mainPanel.players', {count: getAllClients().length}) }}</p-accordion-header>
-						<p-accordion-content>
-							@if (getAllClients().length === 0) {
-								<div>{{ t('mainPanel.noPlayersOnline') }}</div>
-							} @else {
-								<div class="column gap-small">
-									@for (client of getAllClients(); track $index) {
-										<app-data-list-entry [icons]="['https://mc-heads.net/avatar/' + client.id]" [title]="[client.name, '']" [subtitles]="[]" [useLightColor]="false" [clickable]="true" (entryClicked)="clientClicked.emit(client.id)"/>
-									}
-								</div>
+				<div class="column gap-small">
+					<label for="lineThickness">{{ t('mainPanel.lineThickness', {value: lineThickness()}) }}</label>
+					<p-slider inputId="lineThickness" [ngModel]="lineThickness()" (ngModelChange)="setLineThickness($event)" [ngModelOptions]="{standalone: true}" [min]="lineThicknessMin" [max]="lineThicknessMax" [fluid]="true"/>
+					<label for="labelDensity">{{ t('mainPanel.labelDensity', {value: labelDensity()}) }}</label>
+					<p-slider inputId="labelDensity" [ngModel]="labelDensity()" (ngModelChange)="setLabelDensity($event)" [ngModelOptions]="{standalone: true}" [min]="labelDensityMin" [max]="labelDensityMax" [fluid]="true"/>
+				</div>
+				<p-divider/>
+				<div class="column gap-small">
+					<div class="players-title">{{ t('mainPanel.players', {count: getAllClients().length}) }}</div>
+					@if (getAllClients().length === 0) {
+						<div>{{ t('mainPanel.noPlayersOnline') }}</div>
+					} @else {
+						<div class="column gap-small">
+							@for (client of getAllClients(); track $index) {
+								<app-data-list-entry [icons]="['https://mc-heads.net/avatar/' + client.id]" [title]="[client.name, '']" [subtitles]="[]" [useLightColor]="false" [clickable]="true" (entryClicked)="clientClicked.emit(client.id)"/>
 							}
-						</p-accordion-content>
-					</p-accordion-panel>
-				</p-accordion>
+						</div>
+					}
+				</div>
 			</div>
 			<div class="spacing"></div>
 			<div class="column gap padding-sides padding-top-bottom">

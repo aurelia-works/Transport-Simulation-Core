@@ -1,5 +1,6 @@
 import {ChangeDetectionStrategy, Component, computed, CUSTOM_ELEMENTS_SCHEMA, inject, output, signal} from "@angular/core";
 import {MapDataService} from "../../service/map-data.service";
+import {LABEL_DENSITY_MAX, LABEL_DENSITY_MIN, LINE_THICKNESS_MAX, LINE_THICKNESS_MIN, MapSettingsService} from "../../service/map-settings.service";
 import {ROUTE_TYPES, RouteType} from "../../data/route-type";
 import {FormControl, FormGroup, FormsModule, ReactiveFormsModule} from "@angular/forms";
 import {DimensionService} from "../../service/dimension.service";
@@ -7,6 +8,7 @@ import {ThemeService} from "../../service/theme.service";
 import {FloatLabelModule} from "primeng/floatlabel";
 import {SelectModule} from "primeng/select";
 import {SelectButtonModule} from "primeng/selectbutton";
+import {SliderModule} from "primeng/slider";
 import {TooltipModule} from "primeng/tooltip";
 import {DividerModule} from "primeng/divider";
 import {ButtonModule} from "primeng/button";
@@ -14,12 +16,18 @@ import {ToggleSwitchModule} from "primeng/toggleswitch";
 import {VisibilityToggleComponent} from "../visibility-toggle/visibility-toggle.component";
 import {InterchangeStyleToggleComponent} from "../interchange-style-toggle/interchange-style-toggle.component";
 import {SearchComponent} from "../search/search.component";
-import {AccordionModule} from "primeng/accordion";
 import {ClientsService} from "../../service/clients.service";
 import {DataListEntryComponent} from "../data-list-entry/data-list-entry.component";
 import {TranslocoDirective, TranslocoService} from "@jsverse/transloco";
 import {getCookie, setCookie} from "../../data/utilities";
 import {VERSION} from "../../../version";
+
+// Vanilla dimensions get a plain name; modded ones keep their id
+const DIMENSION_NAME_KEYS: Record<string, string> = {
+	"minecraft/overworld": "mainPanel.dimensionOverworld",
+	"minecraft/the_nether": "mainPanel.dimensionNether",
+	"minecraft/the_end": "mainPanel.dimensionEnd",
+};
 
 const languageMapping: Record<string, string> = {
 	en: "English",
@@ -33,11 +41,11 @@ const languageMapping: Record<string, string> = {
 		FloatLabelModule,
 		SelectModule,
 		SelectButtonModule,
+		SliderModule,
 		ButtonModule,
 		ToggleSwitchModule,
 		DividerModule,
 		TooltipModule,
-		AccordionModule,
 		TranslocoDirective,
 		FormsModule,
 		ReactiveFormsModule,
@@ -52,6 +60,7 @@ const languageMapping: Record<string, string> = {
 })
 export class MainPanelComponent {
 	private readonly mapDataService = inject(MapDataService);
+	private readonly mapSettingsService = inject(MapSettingsService);
 	private readonly dimensionService = inject(DimensionService);
 	private readonly clientsService = inject(ClientsService);
 	private readonly themeService = inject(ThemeService);
@@ -62,6 +71,12 @@ export class MainPanelComponent {
 	readonly clientClicked = output<string>();
 	readonly directionsOpened = output<void>();
 	readonly version = VERSION;
+	protected readonly lineThickness = this.mapSettingsService.lineThickness;
+	protected readonly labelDensity = this.mapSettingsService.labelDensity;
+	protected readonly lineThicknessMin = LINE_THICKNESS_MIN;
+	protected readonly lineThicknessMax = LINE_THICKNESS_MAX;
+	protected readonly labelDensityMin = LABEL_DENSITY_MIN;
+	protected readonly labelDensityMax = LABEL_DENSITY_MAX;
 
 	protected readonly formGroup = new FormGroup({
 		search: new FormControl(""),
@@ -71,6 +86,8 @@ export class MainPanelComponent {
 		language: new FormControl(getCookie("language") || this.translocoService.getActiveLang()),
 	});
 	protected readonly routeTypes = signal<[string, RouteType][]>([]);
+	private dimensionOptions: { value: string, label: string }[] = [];
+	private dimensionOptionsKey = "";
 
 	protected readonly languageOptions = computed(() => {
 		return this.translocoService.getAvailableLangs().map(lang => {
@@ -102,6 +119,19 @@ export class MainPanelComponent {
 		return this.dimensionService.getDimensions();
 	}
 
+	getDimensionOptions() {
+		const dimensions = this.getDimensions();
+		const cacheKey = `${this.translocoService.getActiveLang()}|${dimensions.join("|")}`;
+		if (cacheKey !== this.dimensionOptionsKey) {
+			this.dimensionOptionsKey = cacheKey;
+			this.dimensionOptions = dimensions.map(dimension => {
+				const key = DIMENSION_NAME_KEYS[dimension.replace(":", "/")];
+				return {value: dimension, label: key ? this.translocoService.translate(key) : dimension};
+			});
+		}
+		return this.dimensionOptions;
+	}
+
 	setDimension() {
 		const data = this.formGroup.getRawValue();
 		if (data.dimension) {
@@ -126,6 +156,14 @@ export class MainPanelComponent {
 	clickClient(id: string) {
 		this.clientClicked.emit(id);
 		this.formGroup.patchValue({search: undefined});
+	}
+
+	setLineThickness(value: number) {
+		this.mapSettingsService.setLineThickness(value);
+	}
+
+	setLabelDensity(value: number) {
+		this.mapSettingsService.setLabelDensity(value);
 	}
 
 	changeTheme(isDarkTheme: boolean) {
