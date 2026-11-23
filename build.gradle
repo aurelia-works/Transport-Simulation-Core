@@ -78,3 +78,119 @@ tasks.withType(AbstractArchiveTask).configureEach {
 	preserveFileTimestamps = false
 	reproducibleFileOrder = true
 }
+
+// ATR's engine jar: the same classes ATR bundles as libs/Transport-Simulation-Core-0.0.1.jar, built for Java 17.
+// The sources stay as upstream wrote them. This task copies them and points fastutil and Gson at the copies in
+// Shadow-Libraries (org.mtr.libraries.*), as ATR's bundled jar does. It also swaps the few Java 21 list calls for
+// their Java 17 forms. It compiles against ATR's own Shadow-Libraries jars, because the ones in libs/ here are cut down:
+// ./gradlew generateJavaSchemaClasses atrJar -PatrLibs=<ATR repo>/libs
+def atrSourceDir = layout.buildDirectory.dir("atr/src")
+
+tasks.register("atrSources", Copy) {
+	from("src/main/java")
+	into(atrSourceDir)
+	filteringCharset = "UTF-8"
+	filter { String line ->
+		line
+				.replaceAll(/(?<!libraries\.)\bit\.unimi\.dsi\./, "org.mtr.libraries.it.unimi.dsi.")
+				.replaceAll(/(?<!libraries\.)\bcom\.google\.gson\./, "org.mtr.libraries.com.google.gson.")
+				.replace(".getFirst()", ".get(0)")
+				.replace(".removeFirst()", ".remove(0)")
+				.replaceAll(/(\w+)\.getLast\(\)/, '$1.get($1.size() - 1)')
+				.replaceAll(/(\w+)\.removeLast\(\)/, '$1.remove($1.size() - 1)')
+				.replace("Math.clamp(", "org.mtr.core.tool.Utilities.clamp(")
+	}
+	// Math.clamp is Java 21. ATR's bundled jar has these four in Utilities instead, and ATR calls them.
+	// Records become plain classes with public final fields, as in ATR's bundled jar: MTR's own code and add-ons read
+	// fields such as vector.x directly, which a record's private fields would break.
+	doLast {
+		atrSourceDir.get().asFileTree.matching { include "**/*.java" }.each { File file ->
+			final String source = file.getText("UTF-8")
+			final String converted = source.replaceAll(/(?m)^(\t*)((?:public |private |protected )?)record (\w+)\((.*)\)\s*\{$/) { all, String indent, String modifiers, String name, String parameters ->
+				final List<String> fields = []
+				int depth = 0
+				int start = 0
+				for (int i = 0; i <= parameters.length(); i++) {
+					final char c = i < parameters.length() ? parameters.charAt(i) : (char) ','
+					if (c == (char) '<') depth++
+					if (c == (char) '>') depth--
+					if (c == (char) ',' && depth == 0) {
+						fields.add(parameters.substring(start, i).trim())
+						start = i + 1
+					}
+				}
+				final String inner = indent + "\t"
+				final StringBuilder builder = new StringBuilder()
+				builder.append(indent).append(modifiers).append(indent.isEmpty() ? "" : "static ").append("class ").append(name).append(" {\n\n")
+				fields.each { builder.append(inner).append("public final ").append(it).append(";\n") }
+				builder.append("\n").append(inner).append("public ").append(name).append("(").append(parameters).append(") {\n")
+				fields.each { final String field = it.tokenize(" ").last(); builder.append(inner).append("\tthis.").append(field).append(" = ").append(field).append(";\n") }
+				builder.append(inner).append("}\n")
+				fields.each {
+					final List<String> words = it.tokenize(" ").findAll { !it.startsWith("@") }
+					final String field = words.last()
+					final String type = words.subList(0, words.size() - 1).join(" ")
+					builder.append("\n").append(inner).append("public ").append(type).append(" ").append(field).append("() {\n")
+					builder.append(inner).append("\treturn ").append(field).append(";\n").append(inner).append("}\n")
+				}
+				return builder.toString()
+			}
+			if (converted != source) {
+				file.setText(converted, "UTF-8")
+			}
+		}
+
+		final File utilities = atrSourceDir.get().file("org/mtr/core/tool/Utilities.java").asFile
+		final String source = utilities.getText("UTF-8")
+		final int end = source.lastIndexOf("}")
+		utilities.setText(source.substring(0, end) + '''
+	static int clamp(int value, int min, int max) {
+		return Math.min(max, Math.max(min, value));
+	}
+
+	static long clamp(long value, long min, long max) {
+		return Math.min(max, Math.max(min, value));
+	}
+
+	static float clamp(float value, float min, float max) {
+		return Math.min(max, Math.max(min, value));
+	}
+
+	static double clamp(double value, double min, double max) {
+		return Math.min(max, Math.max(min, value));
+	}
+}
+''', "UTF-8")
+	}
+}
+
+sourceSets {
+	atr {
+		java.srcDir(atrSourceDir)
+		def atrLibs = project.findProperty("atrLibs")
+		compileClasspath += files(atrLibs == null ? [] : fileTree(atrLibs) { include "Shadow-Libraries-*.jar" })
+		compileClasspath += sourceSets.main.compileClasspath.filter { !it.name.startsWith("Shadow-Libraries-") }
+	}
+}
+
+tasks.named("compileAtrJava") {
+	dependsOn("atrSources")
+	doFirst {
+		if (!project.hasProperty("atrLibs")) {
+			throw new GradleException("Pass -PatrLibs=<ATR repo>/libs")
+		}
+	}
+	options.release = 17
+	options.encoding = "UTF-8"
+}
+
+tasks.register("atrJar", Jar) {
+	from(sourceSets.atr.output)
+	archiveFileName = "Transport-Simulation-Core-0.0.1.jar"
+	destinationDirectory = layout.buildDirectory.dir("atr/libs")
+	preserveFileTimestamps = false
+	reproducibleFileOrder = true
+	manifest {
+		attributes("Main-Class": "org.mtr.core.Main")
+	}
+}
